@@ -1,0 +1,16 @@
+# Environment variables
+.env
+
+# Credentials and secrets
+credentials.json
+secret*.txt
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# IDE specific files
+.vscode/
+.idea/
