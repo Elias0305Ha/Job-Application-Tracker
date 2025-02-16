@@ -4,6 +4,7 @@
 # Credentials and secrets
 credentials.json
 secret*.txt
+tokens.json
 
 # Dependencies
 node_modules/

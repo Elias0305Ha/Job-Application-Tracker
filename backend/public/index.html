@@ -1,32 +1,247 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Job Applications</title>
+    <title>Job Applications Tracker</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .job { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .filter-button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .filter-button:hover {
+            background-color: #0056b3;
+        }
+        .sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .company-section {
+            margin-bottom: 30px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .company-header {
+            background: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .company-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        .email-thread {
+            padding: 15px;
+        }
+        .job {
+            border: 1px solid #eee;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .job:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .job.email {
+            border-left: 4px solid #28a745;
+            margin: 10px 0;
+        }
+        .job.email.initial-application {
+            border-left: 4px solid #007bff;
+        }
+        .job h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            color: white;
+        }
+        .status.Applied {
+            background-color: #007bff;
+        }
+        .status.Interview {
+            background-color: #ffc107;
+            color: black;
+        }
+        .status.Rejected {
+            background-color: #dc3545;
+        }
+        .status.Accepted {
+            background-color: #28a745;
+        }
+        .email-content {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .email-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .email-date {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .initial-badge {
+            background: #007bff;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
     </style>
 </head>
 <body>
-    <h1>Job Applications</h1>
-    <div id="jobs"></div>
+    <div class="container">
+        <div class="header">
+            <h1>Job Applications Tracker</h1>
+            <button id="toggleFilter" class="filter-button">Show All History</button>
+        </div>
+        <div class="sections">
+            <div class="section">
+                <h2>Saved Applications</h2>
+                <div id="savedJobs"></div>
+            </div>
+            <div class="section">
+                <h2>Email Applications</h2>
+                <div id="emailJobs"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        fetch('http://localhost:5000/api/jobs')
-            .then(response => response.json())
-            .then(jobs => {
-                const jobsDiv = document.getElementById('jobs');
-                jobs.forEach(job => {
-                    const jobDiv = document.createElement('div');
-                    jobDiv.className = 'job';
-                    jobDiv.innerHTML = `
-                        <h3>${job.company} - ${job.position}</h3>
-                        <p>Status: ${job.status}</p>
-                        <p>Applied: ${new Date(job.dateApplied).toLocaleString()}</p>
-                    `;
-                    jobsDiv.appendChild(jobDiv);
-                });
-            })
-            .catch(error => console.error('Error:', error));
+        let isInitialLoad = true;
+
+        function fetchJobs() {
+            fetch(`http://localhost:5000/api/jobs?initialLoad=${isInitialLoad}`)
+                .then(response => response.json())
+                .then(data => {
+                    const savedJobsDiv = document.getElementById('savedJobs');
+                    const emailJobsDiv = document.getElementById('emailJobs');
+                    
+                    // Clear existing content
+                    savedJobsDiv.innerHTML = '';
+                    emailJobsDiv.innerHTML = '';
+
+                    // Display saved jobs
+                    data.savedJobs.forEach(job => {
+                        const jobDiv = document.createElement('div');
+                        jobDiv.className = 'job';
+                        jobDiv.innerHTML = `
+                            <h3>${job.company} - ${job.position}</h3>
+                            <span class="status ${job.status}">${job.status}</span>
+                            <p>Applied: ${new Date(job.dateApplied).toLocaleString()}</p>
+                        `;
+                        savedJobsDiv.appendChild(jobDiv);
+                    });
+
+                    // Group email applications by company
+                    const emailsByCompany = data.emailApplications.reduce((acc, email) => {
+                        if (!acc[email.company]) {
+                            acc[email.company] = [];
+                        }
+                        acc[email.company].push(email);
+                        return acc;
+                    }, {});
+
+                    // Display email applications grouped by company
+                    Object.entries(emailsByCompany).forEach(([company, emails]) => {
+                        // Sort emails by date
+                        emails.sort((a, b) => new Date(b.dateApplied) - new Date(a.dateApplied));
+                        
+                        // Create company section
+                        const companyDiv = document.createElement('div');
+                        companyDiv.className = 'company-section';
+                        
+                        // Get the latest status
+                        const latestStatus = emails[0].status;
+                        
+                        // Create company header
+                        companyDiv.innerHTML = `
+                            <div class="company-header">
+                                <h3>${company}${emails[0].position !== 'From Email' ? ` - ${emails[0].position}` : ''}</h3>
+                                <span class="status ${latestStatus}">${latestStatus}</span>
+                            </div>
+                        `;
+                        
+                        // Add each email in the thread
+                        const threadDiv = document.createElement('div');
+                        threadDiv.className = 'email-thread';
+                        
+                        emails.forEach(email => {
+                            const emailDiv = document.createElement('div');
+                            emailDiv.className = 'job email';
+                            if (email.isInitialApplication) {
+                                emailDiv.className += ' initial-application';
+                            }
+                            emailDiv.innerHTML = `
+                                <div class="email-header">
+                                    <span class="email-date">${new Date(email.dateApplied).toLocaleString()}</span>
+                                    ${email.isInitialApplication ? '<span class="initial-badge">Initial Application</span>' : ''}
+                                </div>
+                                <div class="email-content">
+                                    <p><strong>Subject:</strong> ${email.subject}</p>
+                                    <p><strong>From:</strong> ${email.from}</p>
+                                    <p><strong>Preview:</strong> ${email.snippet}</p>
+                                </div>
+                            `;
+                            threadDiv.appendChild(emailDiv);
+                        });
+                        
+                        companyDiv.appendChild(threadDiv);
+                        emailJobsDiv.appendChild(companyDiv);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Initial fetch
+        fetchJobs();
+
+        // Toggle filter button
+        document.getElementById('toggleFilter').addEventListener('click', () => {
+            isInitialLoad = !isInitialLoad;
+            const button = document.getElementById('toggleFilter');
+            button.textContent = isInitialLoad ? 'Show All History' : 'Show Recent (3 Months)';
+            fetchJobs();
+        });
     </script>
 </body>
 </html>

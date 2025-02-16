@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require('mongoose'); // Add mongoose for ObjectId validation
 const Job = require("../models/Job"); // Import the Job model
+const fetchJobEmails = require("../gmailService"); 
 
 const router = express.Router(); // Create an Express router
 
@@ -30,13 +31,39 @@ router.post("/add", async (req, res) => {
 });
 
 
-// 📤 Route 2: Get all job applications
+// 📤 Route 2: Get job applications and emails with smart filtering
 router.get("/", async (req, res) => {
   try {
-    console.log('🔍 Attempting to fetch all jobs...');
-    const jobs = await Job.find();
-    console.log('✅ Jobs fetched successfully:', jobs);
-    res.json(jobs);
+    // Get the initial load parameter from query
+    const { initialLoad } = req.query;
+    console.log('🔍 Attempting to fetch jobs and emails... Initial load:', initialLoad);
+    
+    // Calculate the date 3 months ago
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    
+    // If it's the initial load, only show last 3 months
+    // Otherwise, show all historical data
+    const query = initialLoad === 'true' ? 
+      { dateApplied: { $gte: threeMonthsAgo } } : 
+      {};
+    
+    // Fetch both jobs and emails concurrently
+    const [jobs, emails] = await Promise.all([
+      Job.find(query).sort({ dateApplied: -1 }),
+      fetchJobEmails(initialLoad === 'true')
+    ]);
+    
+    console.log(`✅ Data fetched successfully. ${initialLoad === 'true' ? 
+      'Showing last 3 months only.' : 
+      'Showing all historical data.'}`);
+    console.log(`Found ${jobs.length} jobs and ${emails.length} emails matching criteria.`);
+    
+    // Combine jobs and emails in the response
+    res.json({
+      savedJobs: jobs,
+      emailApplications: emails
+    });
   } catch (error) {
     console.error('🔴 Error fetching jobs:', error);
     res.status(500).json({ error: "Error fetching job applications" });
@@ -116,5 +143,18 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+
+
+
+// Route to fetch job application emails from Gmail
+router.get("/fetch-emails", async (req, res) => {
+  try {
+    const emails = await fetchJobEmails();
+    res.status(200).json(emails);
+  } catch (error) {
+    console.error("Error fetching job emails:", error);
+    res.status(500).json({ error: "Failed to fetch job emails" });
+  }
+});
 
 module.exports = router; // Export the router

@@ -2,9 +2,24 @@ const Job = require("./models/Job");
 
 // Load environment variables (for API keys)
 const path = require('path');
+const fs = require('fs');
 require("dotenv").config({ path: path.join(__dirname, '.env') });
 
 const jobRoutes = require("./routes/jobRoutes"); // Import job routes
+const fetchJobEmails = require("./gmailService"); // Import Gmail service
+const { google } = require('googleapis'); // Import Google APIs
+
+// Initialize OAuth2 client
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/auth/google/callback"
+);
+
+// Set credentials from environment variables
+oauth2Client.setCredentials({
+  refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+});
 
 const mongoose = require('mongoose');
 
@@ -72,6 +87,19 @@ app.get("/", (req, res) => {
   res.send("Job Application Tracker API is running...");
 });
 
+// Route to revoke existing tokens
+app.get("/auth/google/revoke", async (req, res) => {
+  try {
+    await axios.post(`https://oauth2.googleapis.com/revoke?token=${process.env.GOOGLE_REFRESH_TOKEN}`, null, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    res.send("Tokens revoked successfully. Now try logging in again at /auth/google");
+  } catch (error) {
+    console.error("Error revoking token:", error);
+    res.send("You can proceed to /auth/google to get new tokens");
+  }
+});
+
 // Google OAuth Configuration
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -79,7 +107,8 @@ const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/a
 
 // Step 1: Redirect user to Google login page
 app.get("/auth/google", (req, res) => {
-    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=email%20profile`;
+    // Force consent screen to always appear to ensure we get a refresh token
+    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=email%20profile%20https://www.googleapis.com/auth/gmail.readonly&access_type=offline&prompt=consent&include_granted_scopes=true`;
     res.redirect(authUrl);
 });
 
@@ -113,16 +142,85 @@ app.get("/auth/google/callback", async (req, res) => {
 
         const userData = userResponse.data;
 
-        // Send user data as response
-        res.json({
-            message: "Google Authentication Successful!",
-            user: userData
+        // Save tokens to a file and update .env
+        const tokens = {
+            access_token: tokenResponse.data.access_token,
+            refresh_token: tokenResponse.data.refresh_token
+        };
+        
+        if (!tokenResponse.data.refresh_token) {
+            throw new Error('No refresh token received. Please revoke access and try again.');
+        }
+
+        // Update .env file with new refresh token
+        const envPath = path.join(__dirname, '.env');
+        let envContent = fs.readFileSync(envPath, 'utf8');
+        envContent = envContent.replace(
+            /GOOGLE_REFRESH_TOKEN=.*/,
+            `GOOGLE_REFRESH_TOKEN=${tokenResponse.data.refresh_token}`
+        );
+        fs.writeFileSync(envPath, envContent);
+        
+        // Also save to tokens.json for backup
+        fs.writeFileSync('tokens.json', JSON.stringify({
+            access_token: tokenResponse.data.access_token,
+            refresh_token: tokenResponse.data.refresh_token
+        }, null, 2));
+        
+        // Update the oauth2Client with new refresh token
+        oauth2Client.setCredentials({
+            refresh_token: tokenResponse.data.refresh_token
         });
+
+        // Reload environment variables to ensure they're updated
+        require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+        // Send success response
+        res.send(`
+            <h1>Authentication Successful!</h1>
+            <p>Tokens have been saved. You can close this window.</p>
+            <script>
+                console.log('Tokens:', ${JSON.stringify(tokens)});
+            </script>
+        `);
 
     } catch (error) {
         console.error("Error exchanging code for token:", error.response ? error.response.data : error.message);
         res.status(500).send("Authentication failed.");
     }
+});
+
+// Test Gmail integration
+app.get("/test-gmail", async (req, res) => {
+  try {
+    // First test authentication
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    console.log('Testing Gmail authentication...');
+    
+    try {
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      console.log('Gmail authentication successful:', profile.data);
+    } catch (error) {
+      console.error('Gmail authentication failed:', error);
+      return res.status(401).json({ 
+        error: 'Gmail authentication failed',
+        details: error.message,
+        action: 'Please visit /auth/google to re-authenticate'
+      });
+    }
+
+    // If authentication successful, try to fetch emails
+    console.log('Fetching emails...');
+    const emails = await fetchJobEmails();
+    console.log(`Found ${emails.length} emails`);
+    res.json(emails);
+  } catch (error) {
+    console.error("Gmail Error:", error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack
+    });
+  }
 });
 
 // Start the server on port 5000
