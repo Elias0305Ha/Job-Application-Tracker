@@ -1,7 +1,10 @@
+const Job = require("./models/Job");
+
 // Load environment variables (for API keys)
 const path = require('path');
 require("dotenv").config({ path: path.join(__dirname, '.env') });
 
+const jobRoutes = require("./routes/jobRoutes"); // Import job routes
 
 const mongoose = require('mongoose');
 
@@ -54,6 +57,15 @@ app.use(cors());
 
 // Enable JSON parsing (So we can send/receive JSON data)
 app.use(express.json());
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`📝 ${req.method} ${req.url}`);
+  next();
+});
 
 // Define a simple test route
 app.get("/", (req, res) => {
@@ -115,4 +127,21 @@ app.get("/auth/google/callback", async (req, res) => {
 
 // Start the server on port 5000
 const PORT = process.env.PORT || 5000;
+
+// Register routes
+app.use("/api/jobs", jobRoutes); // Register job routes first
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error('🔴 Error:', err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Add 404 handler for unmatched routes (this should be last)
+app.use('*', (req, res) => {
+  console.log('❌ Route not found:', req.originalUrl);
+  res.status(404).json({ error: `Route ${req.originalUrl} not found` });
+});
+
+// Start the server
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

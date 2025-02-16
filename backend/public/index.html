@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Applications</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .job { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Job Applications</h1>
+    <div id="jobs"></div>
+    <script>
+        fetch('http://localhost:5000/api/jobs')
+            .then(response => response.json())
+            .then(jobs => {
+                const jobsDiv = document.getElementById('jobs');
+                jobs.forEach(job => {
+                    const jobDiv = document.createElement('div');
+                    jobDiv.className = 'job';
+                    jobDiv.innerHTML = `
+                        <h3>${job.company} - ${job.position}</h3>
+                        <p>Status: ${job.status}</p>
+                        <p>Applied: ${new Date(job.dateApplied).toLocaleString()}</p>
+                    `;
+                    jobsDiv.appendChild(jobDiv);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+    </script>
+</body>
+</html>
