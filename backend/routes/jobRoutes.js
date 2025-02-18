@@ -70,30 +70,40 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.put("/update/:id", async (req, res) => {
+// PATCH route for updating job details
+router.patch("/:id", async (req, res) => {
   try {
-    const { id } = req.params; // Extract job ID from URL
-    const { company, position, status } = req.body; // Extract new job details
-
-    // Find the job by ID and update it
-    const updatedJob = await Job.findByIdAndUpdate(
-      id, // Find by ID
-      { company, position, status }, // Update fields
-      { new: true } // Return the updated job
-    );
-
-    // If job is not found
-    if (!updatedJob) {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Find the job first to store original values
+    const job = await Job.findById(id);
+    if (!job) {
       return res.status(404).json({ error: "Job not found" });
     }
 
-    res.status(200).json({
-      message: "Job updated successfully!",
-      updatedJob
-    });
+    // Store original values if not already stored
+    if (!job.originalCompany && updates.company) {
+      job.originalCompany = job.company;
+    }
+    if (!job.originalPosition && updates.position) {
+      job.originalPosition = job.position;
+    }
 
+    // Apply updates
+    Object.assign(job, updates);
+    job.wasEdited = true;
+    
+    // Save the updated job
+    await job.save();
+
+    res.json({
+      message: "Job updated successfully",
+      job
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error updating job application" });
+    console.error('Error updating job:', error);
+    res.status(500).json({ error: "Error updating job" });
   }
 });
 

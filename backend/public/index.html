@@ -119,12 +119,80 @@
             color: #666;
             font-size: 0.9em;
         }
-        .initial-badge {
-            background: #007bff;
-            color: white;
+        .platform-badge {
             padding: 2px 6px;
             border-radius: 3px;
             font-size: 0.8em;
+            color: white;
+        }
+        .platform-badge.workday { background: #0066cc; }
+        .platform-badge.greenhouse { background: #00b388; }
+        .platform-badge.lever { background: #f36; }
+        .platform-badge.other { background: #666; }
+
+        .job-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .info-row {
+            flex: 1;
+        }
+        .edit-btn {
+            padding: 4px 8px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .edit-btn:hover {
+            background: #0056b3;
+        }
+        .editable {
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .editable.editing {
+            background: #fff;
+            border: 1px solid #007bff;
+            padding: 1px 3px;
+        }
+        .email-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .email-details p {
+            margin: 5px 0;
+        }
+        .platform-badge.workday {
+            background: #0066cc;
+            padding: 3px 8px;
+            border-radius: 3px;
+            color: white;
+            font-weight: 500;
+        }
+        .info-row p {
+            margin: 8px 0;
+            display: flex;
+            align-items: baseline;
+        }
+        .info-row p strong {
+            min-width: 80px;
+            margin-right: 10px;
+        }
+        small {
+            color: #666;
+            margin-left: 10px;
+            font-style: italic;
         }
     </style>
 </head>
@@ -208,18 +276,30 @@
                         emails.forEach(email => {
                             const emailDiv = document.createElement('div');
                             emailDiv.className = 'job email';
-                            if (email.isInitialApplication) {
-                                emailDiv.className += ' initial-application';
-                            }
                             emailDiv.innerHTML = `
                                 <div class="email-header">
                                     <span class="email-date">${new Date(email.dateApplied).toLocaleString()}</span>
-                                    ${email.isInitialApplication ? '<span class="initial-badge">Initial Application</span>' : ''}
+                                    <span class="platform-badge ${email.platform}">${email.platform}</span>
                                 </div>
                                 <div class="email-content">
-                                    <p><strong>Subject:</strong> ${email.subject}</p>
-                                    <p><strong>From:</strong> ${email.from}</p>
-                                    <p><strong>Preview:</strong> ${email.snippet}</p>
+                                    <div class="job-info">
+                                        <div class="info-row">
+                                            <p><strong>Company:</strong> 
+                                                <span class="editable" data-id="${email.id}" data-field="company">${email.company}</span>
+                                                ${email.wasEdited ? `<small>(originally: ${email.originalCompany})</small>` : ''}
+                                            </p>
+                                            <p><strong>Position:</strong> 
+                                                <span class="editable" data-id="${email.id}" data-field="position">${email.position}</span>
+                                                ${email.wasEdited ? `<small>(originally: ${email.originalPosition})</small>` : ''}
+                                            </p>
+                                        </div>
+                                        <button class="edit-btn" onclick="toggleEdit('${email.id}')">Edit</button>
+                                    </div>
+                                    <div class="email-details">
+                                        <p><strong>From:</strong> ${email.emailFrom}</p>
+                                        <p><strong>Subject:</strong> ${email.emailSubject}</p>
+                                        <p><strong>Preview:</strong> ${email.emailContent}</p>
+                                    </div>
                                 </div>
                             `;
                             threadDiv.appendChild(emailDiv);
@@ -234,6 +314,45 @@
 
         // Initial fetch
         fetchJobs();
+
+        // Edit functionality
+        function toggleEdit(id) {
+            const editables = document.querySelectorAll(`[data-id="${id}"]`);
+            const button = document.querySelector(`button[onclick="toggleEdit('${id}')"]`);
+            
+            if (button.textContent === 'Edit') {
+                // Switch to edit mode
+                editables.forEach(editable => {
+                    const currentValue = editable.textContent;
+                    editable.innerHTML = `<input type="text" value="${currentValue}">`;
+                    editable.classList.add('editing');
+                });
+                button.textContent = 'Save';
+            } else {
+                // Save changes
+                const updates = {};
+                editables.forEach(editable => {
+                    const field = editable.dataset.field;
+                    const newValue = editable.querySelector('input').value;
+                    updates[field] = newValue;
+                    editable.textContent = newValue;
+                    editable.classList.remove('editing');
+                });
+                
+                // Send updates to server
+                fetch(`http://localhost:5000/api/jobs/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updates)
+                })
+                .then(response => response.json())
+                .then(() => {
+                    button.textContent = 'Edit';
+                    fetchJobs(); // Refresh to show any changes
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        }
 
         // Toggle filter button
         document.getElementById('toggleFilter').addEventListener('click', () => {
