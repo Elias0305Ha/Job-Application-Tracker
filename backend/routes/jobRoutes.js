@@ -30,43 +30,41 @@ router.post("/add", async (req, res) => {
   }
 });
 
-
-// 📤 Route 2: Get job applications and emails with smart filtering
+// GET route for fetching all jobs
 router.get("/", async (req, res) => {
   try {
-    // Get the initial load parameter from query
-    const { initialLoad } = req.query;
-    console.log('🔍 Attempting to fetch jobs and emails... Initial load:', initialLoad);
+    console.log('🔍 Fetching all jobs...');
     
-    // Calculate the date 3 months ago
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    // Check MongoDB connection
+    const isConnected = mongoose.connection.readyState === 1;
+    console.log('MongoDB connection status:', isConnected ? '🟢 Connected' : '🔴 Not connected');
     
-    // If it's the initial load, only show last 3 months
-    // Otherwise, show all historical data
-    const query = initialLoad === 'true' ? 
-      { dateApplied: { $gte: threeMonthsAgo } } : 
-      {};
+    // Get all jobs from the database
+    const savedJobs = await Job.find({});
+    console.log('📊 Total jobs found:', savedJobs.length);
     
-    // Fetch both jobs and emails concurrently
-    const [jobs, emails] = await Promise.all([
-      Job.find(query).sort({ dateApplied: -1 }),
-      fetchJobEmails(initialLoad === 'true')
-    ]);
+    // Log each job's watchlist status
+    savedJobs.forEach(job => {
+      console.log(`Job ${job._id} (${job.company}): isWatchlisted = ${job.isWatchlisted}`);
+    });
     
-    console.log(`✅ Data fetched successfully. ${initialLoad === 'true' ? 
-      'Showing last 3 months only.' : 
-      'Showing all historical data.'}`);
-    console.log(`Found ${jobs.length} jobs and ${emails.length} emails matching criteria.`);
+    // Count watchlisted jobs
+    const watchlistedCount = savedJobs.filter(job => job.isWatchlisted === true).length;
+    console.log('⭐ Watchlisted jobs count:', watchlistedCount);
     
-    // Combine jobs and emails in the response
+    // Send response with full job objects
     res.json({
-      savedJobs: jobs,
-      emailApplications: emails
+      savedJobs: savedJobs.map(job => ({
+        ...job.toObject(),
+        _id: job._id,
+        isWatchlisted: job.isWatchlisted
+      })),
+      emailApplications: [],
+      watchlistedCount
     });
   } catch (error) {
-    console.error('🔴 Error fetching jobs:', error);
-    res.status(500).json({ error: "Error fetching job applications" });
+    console.error('❌ Error fetching jobs:', error);
+    res.status(500).json({ error: "Error fetching jobs", details: error.message });
   }
 });
 
@@ -74,36 +72,55 @@ router.get("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { isWatchlisted } = req.body;
     
-    // Find the job first to store original values
-    const job = await Job.findById(id);
-    if (!job) {
+    console.log('🔄 PATCH Request received for job:', id);
+    console.log('📦 Update request to set isWatchlisted to:', isWatchlisted);
+    
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log('❌ Invalid ObjectId:', id);
+      return res.status(400).json({ error: "Invalid job ID format" });
+    }
+
+    // Find and update the job
+    const updatedJob = await Job.findByIdAndUpdate(
+      id,
+      { $set: { isWatchlisted: isWatchlisted } },
+      { new: true }
+    );
+
+    if (!updatedJob) {
+      console.log('❌ Job not found:', id);
       return res.status(404).json({ error: "Job not found" });
     }
 
-    // Store original values if not already stored
-    if (!job.originalCompany && updates.company) {
-      job.originalCompany = job.company;
-    }
-    if (!job.originalPosition && updates.position) {
-      job.originalPosition = job.position;
-    }
+    console.log('✅ Job successfully updated:', {
+      id: updatedJob._id,
+      company: updatedJob.company,
+      isWatchlisted: updatedJob.isWatchlisted
+    });
 
-    // Apply updates
-    Object.assign(job, updates);
-    job.wasEdited = true;
-    
-    // Save the updated job
-    await job.save();
+    // Verify watchlist status after update
+    const verifyJob = await Job.findById(id);
+    console.log('🔍 Verification - Job after update:', verifyJob);
+
+    // Get all watchlisted jobs for count
+    const watchlistedJobs = await Job.find({ isWatchlisted: true });
+    console.log('📊 Total watchlisted jobs:', watchlistedJobs.length);
 
     res.json({
       message: "Job updated successfully",
-      job
+      job: updatedJob,
+      watchlistCount: watchlistedJobs.length
     });
   } catch (error) {
-    console.error('Error updating job:', error);
-    res.status(500).json({ error: "Error updating job" });
+    console.error('❌ Error updating job:', error);
+    res.status(500).json({ 
+      error: "Error updating job",
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -113,11 +130,11 @@ router.patch("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     // Log the incoming delete request with the job ID
-    console.log("🗑️ Attempting to delete job with ID:", req.params.id);
+    console.log(" Attempting to delete job with ID:", req.params.id);
     
     // First, validate if the ID is in the correct MongoDB ObjectId format
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      console.log("❌ Invalid ID format:", req.params.id);
+      console.log(" Invalid ID format:", req.params.id);
       return res.status(400).json({ 
         error: "Invalid job ID format",
         message: "The provided ID is not in the correct format"
@@ -129,7 +146,7 @@ router.delete("/:id", async (req, res) => {
 
     // If no job was found with that ID
     if (!deletedJob) {
-      console.log("❌ No job found with ID:", req.params.id);
+      console.log(" No job found with ID:", req.params.id);
       return res.status(404).json({ 
         error: "Job not found",
         message: "No job exists with the provided ID"
@@ -137,7 +154,7 @@ router.delete("/:id", async (req, res) => {
     }
 
     // Log success and return the deleted job details
-    console.log("✅ Successfully deleted job:", deletedJob);
+    console.log(" Successfully deleted job:", deletedJob);
     res.status(200).json({ 
       message: "Job deleted successfully!",
       deletedJob // Include the deleted job details in the response
@@ -145,16 +162,13 @@ router.delete("/:id", async (req, res) => {
 
   } catch (error) {
     // Log any errors that occur during the process
-    console.error("🔴 Error while deleting job:", error);
+    console.error(" Error while deleting job:", error);
     res.status(500).json({ 
       error: "Error deleting job application",
       message: error.message
     });
   }
 });
-
-
-
 
 // Route to fetch job application emails from Gmail
 router.get("/fetch-emails", async (req, res) => {

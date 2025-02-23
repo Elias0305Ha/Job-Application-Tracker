@@ -68,7 +68,11 @@ const axios = require("axios"); // Required for making API requests
 const app = express();
 
 // Enable CORS (Allows frontend to talk to backend)
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5000',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  credentials: true
+}));
 
 // Enable JSON parsing (So we can send/receive JSON data)
 app.use(express.json());

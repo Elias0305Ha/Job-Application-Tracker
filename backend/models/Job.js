@@ -12,6 +12,7 @@ const jobSchema = new mongoose.Schema({
         default: 'Applied'
     },
     dateApplied: { type: Date, default: Date.now },
+    isWatchlisted: { type: Boolean, default: false },
 
     // Email data
     emailId: String,
