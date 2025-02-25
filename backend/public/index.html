@@ -281,6 +281,33 @@
             margin: 10px 0;
         }
 
+        /* Add advanced stats styles */
+        .advanced-stats {
+            margin: 20px 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-chart {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-chart h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .response-time {
+            font-size: 24px;
+            color: #007bff;
+            margin: 10px 0;
+        }
+
         /* Add search bar styles */
         .search-bar {
             width: 100%;
@@ -409,6 +436,30 @@
             <div class="stat-card">
                 <h3>Watchlisted</h3>
                 <div class="stat-number" id="watchlistedCount">0</div>
+            </div>
+        </div>
+
+        <!-- Add Advanced Statistics Dashboard -->
+        <div class="advanced-stats">
+            <div class="stat-chart">
+                <h3>📊 Response Rate</h3>
+                <div class="stat-number" id="responseRate">0%</div>
+                <small>Companies that responded</small>
+            </div>
+            <div class="stat-chart">
+                <h3>⏱️ Average Response Time</h3>
+                <div class="response-time" id="avgResponseTime">N/A</div>
+                <small>Days until first response</small>
+            </div>
+            <div class="stat-chart">
+                <h3>📈 Weekly Applications</h3>
+                <div class="stat-number" id="weeklyApps">0</div>
+                <small>Applications this week</small>
+            </div>
+            <div class="stat-chart">
+                <h3>🎯 Success Rate</h3>
+                <div class="stat-number" id="successRate">0%</div>
+                <small>Interview to offer ratio</small>
             </div>
         </div>
 
@@ -562,7 +613,7 @@
                                     >⭐</button>
                                 </h3>
                                 <p><strong>Status:</strong> 
-                                    <span class="status ${job.status ? job.status.toLowerCase() : 'applied'}">
+                                    <span class="status ${job.status?.toLowerCase()}">
                                         ${job.status || 'Applied'}
                                     </span>
                                 </p>
@@ -586,61 +637,6 @@
                     </div>
                 `;
             }).join('');
-        }
-
-        async function toggleWatchlist(id) {
-            try {
-                // Find the star button for this job
-                const jobElement = document.querySelector(`[data-id="${id}"]`);
-                const starButton = jobElement.querySelector('.star-button');
-                
-                // Get current watchlist state from the button's active class
-                const currentlyWatchlisted = starButton.classList.contains('active');
-                console.log('🌟 Toggling watchlist for job:', id, 'Current state:', currentlyWatchlisted);
-                
-                // Disable the button while processing
-                starButton.disabled = true;
-                
-                // Make the API call
-                const response = await fetch(`http://localhost:5000/api/jobs/${id}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        isWatchlisted: !currentlyWatchlisted // Toggle the current state
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    console.log('✅ Successfully updated watchlist status:', data);
-                    
-                    // Update the star button's appearance
-                    const isWatchlisted = data.job.isWatchlisted;
-                    starButton.classList.toggle('active', isWatchlisted);
-                    starButton.title = isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist';
-                    
-                    // Re-fetch all jobs to update both lists
-                    await fetchJobs();
-                } else {
-                    console.error('❌ Server error:', data);
-                    alert('Failed to update watchlist status. Please try again.');
-                }
-            } catch (error) {
-                console.error('❌ Error toggling watchlist:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Re-enable the button
-                const jobElement = document.querySelector(`[data-id="${id}"]`);
-                if (jobElement) {
-                    const starButton = jobElement.querySelector('.star-button');
-                    if (starButton) {
-                        starButton.disabled = false;
-                    }
-                }
-            }
         }
 
         // Add sort functionality
@@ -807,24 +803,60 @@
             document.body.removeChild(link);
         }
 
-        // Add statistics update function
-        function updateStatistics(jobs) {
-            if (!jobs) return;
-            
-            const totalApps = jobs.length;
-            const interviewCount = jobs.filter(job => 
-                job.status?.toLowerCase() === 'interview').length;
-            const acceptedCount = jobs.filter(job => 
-                job.status?.toLowerCase() === 'accepted').length;
-            const watchlistedCount = jobs.filter(job => 
-                job.isWatchlisted).length;
+        // Add toggle watchlist functionality
+        async function toggleWatchlist(id) {
+            try {
+                // Find the star button for this job
+                const jobElement = document.querySelector(`[data-id="${id}"]`);
+                const starButton = jobElement.querySelector('.star-button');
+                
+                // Get current watchlist state from the button's active class
+                const currentlyWatchlisted = starButton.classList.contains('active');
+                console.log('🌟 Toggling watchlist for job:', id, 'Current state:', currentlyWatchlisted);
+                
+                // Disable the button while processing
+                starButton.disabled = true;
+                
+                // Make the API call
+                const response = await fetch(`http://localhost:5000/api/jobs/${id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        isWatchlisted: !currentlyWatchlisted // Toggle the current state
+                    })
+                });
 
-            document.getElementById('totalApps').textContent = totalApps;
-            document.getElementById('interviewRate').textContent = 
-                totalApps ? Math.round((interviewCount / totalApps) * 100) + '%' : '0%';
-            document.getElementById('acceptanceRate').textContent = 
-                totalApps ? Math.round((acceptedCount / totalApps) * 100) + '%' : '0%';
-            document.getElementById('watchlistedCount').textContent = watchlistedCount;
+                const data = await response.json();
+                
+                if (response.ok) {
+                    console.log('✅ Successfully updated watchlist status:', data);
+                    
+                    // Update the star button's appearance
+                    const isWatchlisted = data.job.isWatchlisted;
+                    starButton.classList.toggle('active', isWatchlisted);
+                    starButton.title = isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist';
+                    
+                    // Re-fetch all jobs to update both lists
+                    await fetchJobs();
+                } else {
+                    console.error('❌ Server error:', data);
+                    alert('Failed to update watchlist status. Please try again.');
+                }
+            } catch (error) {
+                console.error('❌ Error toggling watchlist:', error);
+                alert('An error occurred. Please try again.');
+            } finally {
+                // Re-enable the button
+                const jobElement = document.querySelector(`[data-id="${id}"]`);
+                if (jobElement) {
+                    const starButton = jobElement.querySelector('.star-button');
+                    if (starButton) {
+                        starButton.disabled = false;
+                    }
+                }
+            }
         }
 
         // Load sort preference on startup
@@ -837,6 +869,58 @@
             }
         } catch (error) {
             console.error('Error loading sort preference:', error);
+        }
+
+        // Modify statistics update function
+        function updateStatistics(jobs) {
+            if (!jobs) return;
+            
+            const totalApps = jobs.length;
+            const interviewCount = jobs.filter(job => 
+                job.status?.toLowerCase() === 'interview').length;
+            const acceptedCount = jobs.filter(job => 
+                job.status?.toLowerCase() === 'accepted').length;
+            const watchlistedCount = jobs.filter(job => 
+                job.isWatchlisted).length;
+            const respondedCount = jobs.filter(job => 
+                job.status?.toLowerCase() !== 'applied').length;
+
+            // Calculate weekly applications
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            const weeklyApps = jobs.filter(job => 
+                new Date(job.dateApplied) > oneWeekAgo).length;
+
+            // Basic stats
+            document.getElementById('totalApps').textContent = totalApps;
+            document.getElementById('interviewRate').textContent = 
+                totalApps ? Math.round((interviewCount / totalApps) * 100) + '%' : '0%';
+            document.getElementById('acceptanceRate').textContent = 
+                totalApps ? Math.round((acceptedCount / totalApps) * 100) + '%' : '0%';
+            document.getElementById('watchlistedCount').textContent = watchlistedCount;
+
+            // Advanced stats
+            document.getElementById('responseRate').textContent = 
+                totalApps ? Math.round((respondedCount / totalApps) * 100) + '%' : '0%';
+            document.getElementById('weeklyApps').textContent = weeklyApps;
+            document.getElementById('successRate').textContent = 
+                interviewCount ? Math.round((acceptedCount / interviewCount) * 100) + '%' : '0%';
+
+            // Calculate average response time (if status changed from Applied)
+            const responseTimes = jobs
+                .filter(job => job.status?.toLowerCase() !== 'applied')
+                .map(job => {
+                    const applied = new Date(job.dateApplied);
+                    const now = new Date();
+                    return Math.round((now - applied) / (1000 * 60 * 60 * 24)); // days
+                });
+
+            const avgResponseTime = responseTimes.length > 0 
+                ? Math.round(responseTimes.reduce((a, b) => a + b) / responseTimes.length)
+                : null;
+
+            document.getElementById('avgResponseTime').textContent = 
+                avgResponseTime ? `${avgResponseTime} days` : 'N/A';
         }
 
         // Initial load

@@ -13,6 +13,11 @@ const jobSchema = new mongoose.Schema({
     },
     dateApplied: { type: Date, default: Date.now },
     isWatchlisted: { type: Boolean, default: false },
+    industry: { 
+        type: String, 
+        enum: ['Tech', 'Finance', 'Healthcare', 'Education', 'Manufacturing', 'Retail', 'Other'],
+        default: 'Tech'
+    },
 
     // Email data
     emailId: String,

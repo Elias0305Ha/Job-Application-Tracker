@@ -124,6 +124,24 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+// PATCH route for toggling watchlist status
+router.patch("/:id/watchlist", async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    job.isWatchlisted = !job.isWatchlisted;
+    await job.save();
+
+    res.json({ message: "Watchlist status updated successfully", job });
+  } catch (error) {
+    console.error('Error toggling watchlist:', error);
+    res.status(500).json({ error: "Error updating watchlist status" });
+  }
+});
+
 // Route to delete a job application
 // Changed from "/delete/:id" to just "/:id" to simplify the route
 // Now the full URL will be "/api/jobs/:id" instead of "/api/jobs/delete/:id"
