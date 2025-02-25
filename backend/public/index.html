@@ -257,6 +257,51 @@
             border-radius: 4px;
             margin: 10px 0;
         }
+
+        /* Add statistics dashboard styles */
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+
+        /* Add search bar styles */
+        .search-bar {
+            width: 100%;
+            max-width: 500px;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
     </style>
 </head>
 <body>
@@ -265,7 +310,35 @@
             <h1>Job Applications Tracker</h1>
             <button id="toggleFilter" class="filter-button">Show All History</button>
         </div>
-        
+
+        <!-- Add Statistics Dashboard -->
+        <div class="stats-dashboard">
+            <div class="stat-card">
+                <h3>Total Applications</h3>
+                <div class="stat-number" id="totalApps">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Interview Rate</h3>
+                <div class="stat-number" id="interviewRate">0%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Acceptance Rate</h3>
+                <div class="stat-number" id="acceptanceRate">0%</div>
+            </div>
+            <div class="stat-card">
+                <h3>Watchlisted</h3>
+                <div class="stat-number" id="watchlistedCount">0</div>
+            </div>
+        </div>
+
+        <!-- Add Search Bar -->
+        <div class="search-bar">
+            <input type="text" 
+                   class="search-input" 
+                   placeholder="Search by company or position..."
+                   oninput="searchJobs(this.value)">
+        </div>
+
         <div class="main-content">
             <!-- Left side: All Applications -->
             <div class="all-applications">
@@ -319,6 +392,9 @@
                     renderApplications(allJobs) || '<div class="no-applications">No applications found</div>';
                 document.getElementById('watchlistApplications').innerHTML = 
                     renderApplications(watchlist) || '<div class="no-applications">No watchlisted applications</div>';
+                
+                // Update statistics
+                updateStatistics(allJobs);
                 
                 // Set initial load to false after first load
                 isInitialLoad = false;
@@ -430,6 +506,41 @@
                     }
                 }
             }
+        }
+
+        // Add search functionality
+        function searchJobs(query) {
+            query = query.toLowerCase();
+            const allJobs = document.querySelectorAll('.job');
+            
+            allJobs.forEach(job => {
+                const jobText = job.querySelector('h3').textContent.toLowerCase();
+                if (jobText.includes(query)) {
+                    job.style.display = '';
+                } else {
+                    job.style.display = 'none';
+                }
+            });
+        }
+
+        // Add statistics update function
+        function updateStatistics(jobs) {
+            if (!jobs) return;
+            
+            const totalApps = jobs.length;
+            const interviewCount = jobs.filter(job => 
+                job.status?.toLowerCase() === 'interview').length;
+            const acceptedCount = jobs.filter(job => 
+                job.status?.toLowerCase() === 'accepted').length;
+            const watchlistedCount = jobs.filter(job => 
+                job.isWatchlisted).length;
+
+            document.getElementById('totalApps').textContent = totalApps;
+            document.getElementById('interviewRate').textContent = 
+                totalApps ? Math.round((interviewCount / totalApps) * 100) + '%' : '0%';
+            document.getElementById('acceptanceRate').textContent = 
+                totalApps ? Math.round((acceptedCount / totalApps) * 100) + '%' : '0%';
+            document.getElementById('watchlistedCount').textContent = watchlistedCount;
         }
 
         // Initial load
