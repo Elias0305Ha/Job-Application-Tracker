@@ -302,6 +302,87 @@
             border-color: #007bff;
             outline: none;
         }
+
+        /* Add sort and export button styles */
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            align-items: center;
+        }
+
+        .sort-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .sort-button, .export-button {
+            padding: 8px 15px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            background: white;
+            color: #007bff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .sort-button:hover, .export-button:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .sort-button.active {
+            background: #007bff;
+            color: white;
+        }
+
+        .export-button {
+            margin-left: auto;
+            background: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+
+        .export-button:hover {
+            background: #218838;
+            border-color: #218838;
+        }
+
+        /* Add sector filter styles */
+        .sector-filter {
+            margin-left: 10px;
+            position: relative;
+        }
+
+        .sector-select {
+            padding: 8px 15px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            background: white;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 14px;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 12px;
+            padding-right: 30px;
+        }
+
+        .sector-select:hover {
+            border-color: #0056b3;
+        }
+
+        .sector-select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
     </style>
 </head>
 <body>
@@ -339,6 +420,40 @@
                    oninput="searchJobs(this.value)">
         </div>
 
+        <!-- Add Sort and Export Options -->
+        <div class="action-bar">
+            <div class="sort-options">
+                <button class="sort-button" onclick="sortJobs('date')" data-sort="date">
+                    📅 Date
+                </button>
+                <button class="sort-button" onclick="sortJobs('company')" data-sort="company">
+                    🏢 Company
+                </button>
+                <button class="sort-button" onclick="sortJobs('status')" data-sort="status">
+                    📊 Status
+                </button>
+            </div>
+            <div class="sector-filter">
+                <select class="sector-select" onchange="filterBySector(this.value)">
+                    <option value="">🏢 All Sectors</option>
+                    <option value="software">💻 Software & Internet</option>
+                    <option value="ai">🤖 AI & Machine Learning</option>
+                    <option value="cloud">☁️ Cloud & DevOps</option>
+                    <option value="cybersecurity">🔒 Cybersecurity</option>
+                    <option value="fintech">💳 FinTech</option>
+                    <option value="healthtech">⚕️ HealthTech</option>
+                    <option value="ecommerce">🛒 E-commerce</option>
+                    <option value="gaming">🎮 Gaming & Entertainment</option>
+                    <option value="telecom">📡 Telecommunications</option>
+                    <option value="consulting">💼 Tech Consulting</option>
+                    <option value="other">📱 Other Tech</option>
+                </select>
+            </div>
+            <button class="export-button" onclick="exportToCSV()">
+                📥 Export to CSV
+            </button>
+        </div>
+
         <div class="main-content">
             <!-- Left side: All Applications -->
             <div class="all-applications">
@@ -362,7 +477,8 @@
 
     <script>
         let isInitialLoad = true;
-
+        let currentSort = { field: 'date', ascending: false };
+        
         async function fetchJobs() {
             try {
                 const response = await fetch(`http://localhost:5000/api/jobs?initialLoad=${isInitialLoad}`);
@@ -373,6 +489,25 @@
                 // Combine all jobs from both sources
                 const allJobs = [...data.savedJobs, ...data.emailApplications];
                 console.log('📋 All jobs:', allJobs);
+
+                // Apply sorting if a sort is selected
+                if (currentSort.field) {
+                    allJobs.sort((a, b) => {
+                        let compareResult = 0;
+                        switch (currentSort.field) {
+                            case 'date':
+                                compareResult = new Date(b.dateApplied) - new Date(a.dateApplied);
+                                break;
+                            case 'company':
+                                compareResult = a.company.localeCompare(b.company);
+                                break;
+                            case 'status':
+                                compareResult = (a.status || '').localeCompare(b.status || '');
+                                break;
+                        }
+                        return currentSort.ascending ? compareResult : -compareResult;
+                    });
+                }
                 
                 // Split into watchlist and regular applications
                 const watchlist = allJobs.filter(job => job.isWatchlisted === true);
@@ -508,6 +643,32 @@
             }
         }
 
+        // Add sort functionality
+        function sortJobs(field) {
+            const buttons = document.querySelectorAll('.sort-button');
+            buttons.forEach(btn => {
+                if (btn.dataset.sort === field) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Toggle direction if same field is clicked
+            if (currentSort.field === field) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.field = field;
+                currentSort.ascending = true;
+            }
+
+            // Store sort preference
+            localStorage.setItem('sortPreference', JSON.stringify(currentSort));
+
+            // Refresh jobs with new sort
+            fetchJobs();
+        }
+
         // Add search functionality
         function searchJobs(query) {
             query = query.toLowerCase();
@@ -521,6 +682,129 @@
                     job.style.display = 'none';
                 }
             });
+        }
+
+        // Add sector filter functionality
+        function filterBySector(sector) {
+            const allJobs = document.querySelectorAll('.job');
+            
+            if (!sector) {
+                // Show all jobs if no sector is selected
+                allJobs.forEach(job => job.style.display = '');
+                return;
+            }
+
+            allJobs.forEach(job => {
+                const company = job.querySelector('h3').textContent.toLowerCase();
+                let showJob = false;
+
+                switch(sector) {
+                    case 'software':
+                        showJob = company.includes('software') || company.includes('tech') || 
+                                company.includes('digital') || company.includes('app') ||
+                                company.includes('platform');
+                        break;
+                    case 'ai':
+                        showJob = company.includes('ai') || company.includes('intelligence') ||
+                                company.includes('machine learning') || company.includes('data');
+                        break;
+                    case 'cloud':
+                        showJob = company.includes('cloud') || company.includes('aws') ||
+                                company.includes('azure') || company.includes('devops');
+                        break;
+                    case 'cybersecurity':
+                        showJob = company.includes('security') || company.includes('cyber') ||
+                                company.includes('defense') || company.includes('protect');
+                        break;
+                    case 'fintech':
+                        showJob = company.includes('fintech') || company.includes('financial') ||
+                                company.includes('payment') || company.includes('bank');
+                        break;
+                    case 'healthtech':
+                        showJob = company.includes('health') || company.includes('medical') ||
+                                company.includes('biotech') || company.includes('care');
+                        break;
+                    case 'ecommerce':
+                        showJob = company.includes('commerce') || company.includes('shop') ||
+                                company.includes('retail') || company.includes('market');
+                        break;
+                    case 'gaming':
+                        showJob = company.includes('game') || company.includes('entertainment') ||
+                                company.includes('media') || company.includes('interactive');
+                        break;
+                    case 'telecom':
+                        showJob = company.includes('telecom') || company.includes('network') ||
+                                company.includes('communication') || company.includes('mobile');
+                        break;
+                    case 'consulting':
+                        showJob = company.includes('consulting') || company.includes('solution') ||
+                                company.includes('service') || company.includes('system');
+                        break;
+                    case 'other':
+                        // Show if doesn't match any other category
+                        showJob = true;
+                        break;
+                }
+
+                job.style.display = showJob ? '' : 'none';
+            });
+        }
+
+        // Add export functionality
+        function exportToCSV() {
+            // Get only the visible jobs from the page
+            const visibleJobs = Array.from(document.querySelectorAll('.job'))
+                .filter(job => job.style.display !== 'none')
+                .map(job => {
+                    const title = job.querySelector('h3').textContent;
+                    const company = title.split(' - ')[0].trim();
+                    const position = title.split(' - ')[1].split('⭐')[0].trim();
+                    const status = job.querySelector('.status').textContent.trim();
+                    const dateApplied = job.querySelector('p:nth-child(3)').textContent
+                        .replace('Applied:', '').trim();
+                    const platform = job.querySelector('.platform-badge') ? 
+                        job.querySelector('.platform-badge').textContent.trim() : '';
+                    const isWatchlisted = job.querySelector('.star-button.active') ? 'Yes' : 'No';
+
+                    return {
+                        company,
+                        position,
+                        status,
+                        dateApplied,
+                        platform,
+                        isWatchlisted
+                    };
+                });
+
+            if (visibleJobs.length === 0) {
+                alert('No jobs to export! Try adjusting your filters.');
+                return;
+            }
+
+            // Prepare CSV content
+            const headers = ['Company', 'Position', 'Status', 'Date Applied', 'Platform', 'Watchlisted'];
+            const csvContent = [
+                headers.join(','),
+                ...visibleJobs.map(job => [
+                    `"${job.company || ''}"`,
+                    `"${job.position || ''}"`,
+                    `"${job.status || 'Applied'}"`,
+                    `"${job.dateApplied}"`,
+                    `"${job.platform || ''}"`,
+                    `"${job.isWatchlisted}"`,
+                ].join(','))
+            ].join('\n');
+
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            const timestamp = new Date().toLocaleString().replace(/[/:]/g, '-');
+            link.setAttribute('download', `job_applications_${timestamp}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         // Add statistics update function
@@ -541,6 +825,18 @@
             document.getElementById('acceptanceRate').textContent = 
                 totalApps ? Math.round((acceptedCount / totalApps) * 100) + '%' : '0%';
             document.getElementById('watchlistedCount').textContent = watchlistedCount;
+        }
+
+        // Load sort preference on startup
+        try {
+            const savedSort = localStorage.getItem('sortPreference');
+            if (savedSort) {
+                currentSort = JSON.parse(savedSort);
+                const button = document.querySelector(`[data-sort="${currentSort.field}"]`);
+                if (button) button.classList.add('active');
+            }
+        } catch (error) {
+            console.error('Error loading sort preference:', error);
         }
 
         // Initial load
