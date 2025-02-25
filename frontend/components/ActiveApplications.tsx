@@ -45,7 +45,9 @@ const JobCard = ({ job, onToggleWatchlist }) => (
       <button 
         className="ml-4 p-2 rounded-full hover:bg-[#334155] transition-colors duration-300"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
+          console.log('🖱️ Star button clicked for job:', job._id);
           onToggleWatchlist(job._id);
         }}
       >
@@ -81,9 +83,22 @@ export default function ActiveApplications() {
   const [loading, setLoading] = useState(true)
 
   const toggleWatchlist = async (jobId) => {
+    console.log('🔍 ActiveApplications - Toggle clicked for job:', jobId);
     try {
       const currentJob = jobs.find(job => job._id === jobId);
-      if (!currentJob) return;
+      if (!currentJob) {
+        console.error('❌ Job not found:', jobId);
+        return;
+      }
+
+      console.log('📦 Current job:', currentJob);
+      const newWatchlistState = !currentJob.isWatchlisted;
+      console.log('🔄 Setting watchlist state to:', newWatchlistState);
+
+      // Update local state first for immediate feedback
+      setJobs(prevJobs => prevJobs.map(job => 
+        job._id === jobId ? { ...job, isWatchlisted: newWatchlistState } : job
+      ));
 
       const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
         method: 'PATCH',
@@ -91,24 +106,28 @@ export default function ActiveApplications() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          isWatchlisted: !currentJob.isWatchlisted
+          isWatchlisted: newWatchlistState
         })
       });
       
+      console.log('🌐 API Response status:', response.status);
       if (response.ok) {
-        // Update local state
-        setJobs(jobs.map(job => 
-          job._id === jobId ? { ...job, isWatchlisted: !job.isWatchlisted } : job
-        ));
+        const data = await response.json();
+        console.log('✅ API Response data:', data);
 
-        // Trigger a custom event to notify Watchlist component
-        const event = new CustomEvent('watchlistUpdated', { 
-          detail: { jobId, isWatchlisted: !currentJob.isWatchlisted } 
-        });
-        window.dispatchEvent(event);
+        // Dispatch event after successful API call
+        window.dispatchEvent(new CustomEvent('watchlist-update', {
+          detail: { jobId, isWatchlisted: newWatchlistState }
+        }));
+      } else {
+        console.error('❌ API Error:', await response.text());
+        // Revert the state if API call failed
+        setJobs(prevJobs => prevJobs.map(job => 
+          job._id === jobId ? { ...job, isWatchlisted: !newWatchlistState } : job
+        ));
       }
     } catch (error) {
-      console.error('Error toggling watchlist:', error);
+      console.error('❌ Error toggling watchlist:', error);
     }
   };
 

@@ -14,17 +14,37 @@ const formatDate = (dateString) => {
 }
 
 const WatchlistCard = ({ job, onToggleWatchlist }) => (
-  <div className="bg-[#1e293b] p-4 rounded-lg shadow-md transition-all duration-300 hover:shadow-lg hover:scale-102 mb-4">
+  <div className="group bg-[#1e293b] p-6 rounded-lg shadow-md transition-all duration-300 hover:shadow-xl hover:scale-[1.02] hover:bg-[#1e293b]/80 mb-6">
     <div className="flex justify-between items-start">
-      <div>
-        <h3 className="text-lg font-semibold">{job.company}</h3>
-        <p className="text-[#94a3b8]">{job.position}</p>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xl font-semibold group-hover:text-[#3b82f6] transition-colors duration-300">{job.company}</h3>
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
+              job.status === "Applied"
+                ? "bg-[#3b82f6] text-white group-hover:bg-[#2563eb]"
+                : job.status === "Interview"
+                  ? "bg-[#eab308] text-black group-hover:bg-[#ca8a04]"
+                  : job.status === "Rejected"
+                    ? "bg-[#ef4444] text-white group-hover:bg-[#dc2626]"
+                    : "bg-[#22c55e] text-white group-hover:bg-[#16a34a]"
+            }`}
+          >
+            {job.status}
+          </span>
+        </div>
+        <p className="text-[#94a3b8] text-lg mt-1 group-hover:text-white transition-colors duration-300">{job.position}</p>
       </div>
       <button 
-        className="text-[#eab308] hover:text-[#ca8a04]"
-        onClick={() => onToggleWatchlist(job._id)}
+        className="ml-4 p-2 rounded-full hover:bg-[#334155] transition-colors duration-300"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('🖱️ Star button clicked for job:', job._id);
+          onToggleWatchlist(job._id);
+        }}
       >
-        <Star size={20} fill="#eab308" />
+        <Star size={24} className="text-[#eab308] fill-[#eab308] transition-transform duration-300 hover:scale-110" />
       </button>
     </div>
     <div className="mt-2 text-sm text-[#94a3b8]">
@@ -42,7 +62,19 @@ export default function Watchlist() {
   const [loading, setLoading] = useState(true)
 
   const toggleWatchlist = async (jobId) => {
+    console.log('🔍 Watchlist - Toggle clicked for job:', jobId);
     try {
+      const currentJob = watchlistedJobs.find(job => job._id === jobId);
+      if (!currentJob) {
+        console.error('❌ Job not found:', jobId);
+        return;
+      }
+
+      console.log('📦 Current job:', currentJob);
+
+      // Update local state first for immediate feedback
+      setWatchlistedJobs(prev => prev.filter(job => job._id !== jobId));
+
       const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`, {
         method: 'PATCH',
         headers: {
@@ -53,11 +85,22 @@ export default function Watchlist() {
         })
       });
       
+      console.log('🌐 API Response status:', response.status);
       if (response.ok) {
-        setWatchlistedJobs(watchlistedJobs.filter(job => job._id !== jobId));
+        const data = await response.json();
+        console.log('✅ API Response data:', data);
+
+        // Dispatch event after successful API call
+        window.dispatchEvent(new CustomEvent('watchlist-update', {
+          detail: { jobId, isWatchlisted: false }
+        }));
+      } else {
+        console.error('❌ API Error:', await response.text());
+        // Revert the state if API call failed
+        setWatchlistedJobs(prev => [...prev, currentJob]);
       }
     } catch (error) {
-      console.error('Error removing from watchlist:', error);
+      console.error('❌ Error removing from watchlist:', error);
     }
   };
 
@@ -78,27 +121,30 @@ export default function Watchlist() {
 
     fetchWatchlistedJobs()
 
-    // Listen for watchlist updates
+    // Listen for watchlist updates with the new event name
     const handleWatchlistUpdate = (event) => {
       const { jobId, isWatchlisted } = event.detail;
+      
       if (isWatchlisted) {
-        // Fetch the updated job data
+        // If job is being added to watchlist, fetch it
         fetch('http://localhost:5000/api/jobs')
           .then(res => res.json())
           .then(data => {
             const allJobs = [...data.savedJobs, ...data.emailApplications];
             const updatedJob = allJobs.find(job => job._id === jobId);
-            if (updatedJob) {
+            if (updatedJob && updatedJob.isWatchlisted) {
               setWatchlistedJobs(prev => [...prev, updatedJob]);
             }
-          });
+          })
+          .catch(error => console.error('Error fetching updated job:', error));
       } else {
+        // If job is being removed from watchlist, remove it from state
         setWatchlistedJobs(prev => prev.filter(job => job._id !== jobId));
       }
     };
 
-    window.addEventListener('watchlistUpdated', handleWatchlistUpdate);
-    return () => window.removeEventListener('watchlistUpdated', handleWatchlistUpdate);
+    window.addEventListener('watchlist-update', handleWatchlistUpdate);
+    return () => window.removeEventListener('watchlist-update', handleWatchlistUpdate);
   }, []);
 
   if (loading) {
